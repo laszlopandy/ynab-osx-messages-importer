@@ -1,0 +1,18 @@
+{
+  "private": true,
+  "name": "ynab-sms",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "author": "Laszlo Pandy <laszlok2@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "install": "tsc",
+    "start": "node ./dist/index.js"
+  },
+  "dependencies": {
+    "@types/node": "6.0.118",
+    "sqlite": "3.0.0",
+    "ynab": "1.9.0"
+  }
+}
