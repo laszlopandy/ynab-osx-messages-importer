@@ -9,7 +9,7 @@ interface SmsRow {
 }
 
 interface Transaction {
-    type: 'pos' | 'utalas' | 'allando' | 'csoportos';
+    type: 'pos' | 'utalas' | 'allando' | 'csoportos' | 'hitel';
     value: number;
     balance: number;
     timestamp: string; // ex. 2018.12.24 12:39:06
@@ -27,7 +27,7 @@ WHERE
     handle_id in
         (SELECT rowid from handle WHERE id in  ("+36303444770", "+36309266245"))
     AND date_ >= date("2018-11-28")
-ORDER BY date DESC
+ORDER BY date ASC
 `
 
 function parseNumber(str: string): number {
@@ -98,39 +98,64 @@ const SMS_REGEX: Array<[ RegExp, (parts: Array<string>) => Transaction ]> = [
             balance: parseNumber(parts[5]),
             message: parts[1] + (parts.length > 6 ? " " + parts[6] : ""),
         })
+    ],
+    [
+        /^HUF fizetési szàmla \([0-9]+\) esedékes (hitel\/ tartozàs|kamat) törlesztve ([0-9 ]+)Ft ([0-9\.]+) E: ([0-9 ]+)Ft Közl: (.*)$/,
+        (parts: Array<string>) => ({
+            type: 'hitel',
+            value: -1 * parseNumber(parts[2]),
+            partner: 'Budapest Bank',
+            timestamp: parts[3],
+            balance: parseNumber(parts[4]),
+            message: parts[1],
+        })
     ]
 ];
 
 const SIKERTELEN = /^Sikertelen Visa Prémium POS/;
 
+function shouldSkip(text: string): boolean {
+    return SIKERTELEN.test(text);
+}
+
+function processRow(row: SmsRow): Transaction | null {
+    let item = null;
+    if (row != null && row.text != null && !shouldSkip(row.text)) {
+        for (const [regex, func] of SMS_REGEX) {
+            const parts = regex.exec(row.text);
+            if (parts != null) {
+                item = func(parts);
+                //console.log(item);
+                break;
+            }
+        }
+
+        if (item == null) {
+            console.log("ERROR cannot match", row.text);
+        }
+    }
+
+    return item;
+}
+
 function main() {
+
     sqlite.open('/Users/laszlopandy/Library/Messages/chat.db')
-        .then(db => {
-            db.each(SMS_QUERY, (_, row: SmsRow) => {
-                if (row != null && row.text != null) {
-                    if (SIKERTELEN.test(row.text)) {
-                        return;
-                    }
-
-                    let item = null;
-                    for (const [regex, func] of SMS_REGEX) {
-                        const parts = regex.exec(row.text);
-                        if (parts != null) {
-                            item = func(parts);
-                            //console.log(item);
-                            break;
-                        }
-                    }
-
-                    if (item == null) {
-                        console.log("ERROR cannot match", row.text);
-                    }
-                }
+            .then(db => {
+                return db.all(SMS_QUERY);
+            })
+            .catch(err => {
+                console.log(err);
+                return [];
+            })
+            .then((rows: Array<SmsRow>) => {
+                return rows.map(processRow).filter(x => x != null) as Array<Transaction>;
+            })
+            .then(transactions => {
+                console.log(transactions.length);
+                console.log(transactions[0]);
             });
-        })
-        .catch(err => {
-            console.log(err);
-        });
+
 }
 
 if (require.main === module) {
