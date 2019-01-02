@@ -101,11 +101,17 @@ const SMS_REGEX: Array<[ RegExp, (parts: Array<string>) => Transaction ]> = [
     ]
 ];
 
+const SIKERTELEN = /^Sikertelen Visa Prémium POS/;
+
 function main() {
     sqlite.open('/Users/laszlopandy/Library/Messages/chat.db')
         .then(db => {
             db.each(SMS_QUERY, (_, row: SmsRow) => {
                 if (row != null && row.text != null) {
+                    if (SIKERTELEN.test(row.text)) {
+                        return;
+                    }
+
                     let item = null;
                     for (const [regex, func] of SMS_REGEX) {
                         const parts = regex.exec(row.text);
