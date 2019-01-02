@@ -17,6 +17,7 @@ interface Transaction {
     message: string;
 }
 
+const BUDAPEST_BANK_SMS = ["+36303444770", "+36309266245"];
 const SMS_QUERY = `
 SELECT
     rowid,
@@ -25,8 +26,10 @@ SELECT
 FROM message
 WHERE
     handle_id in
-        (SELECT rowid from handle WHERE id in  ("+36303444770", "+36309266245"))
-    AND date_ >= date("2018-11-28")
+        (SELECT rowid from handle WHERE id in
+            (${BUDAPEST_BANK_SMS.map(x => '"' + x + '"').join(', ')})
+        )
+    AND date_ >= date(?)
 ORDER BY date ASC
 `
 
@@ -140,9 +143,9 @@ function processRow(row: SmsRow): Transaction | null {
 
 function main() {
 
-    sqlite.open('/Users/laszlopandy/Library/Messages/chat.db')
+    sqlite.open('/Users/laszlopandy/Library/Messages/chat.db', { mode: 1 /* read only */ })
             .then(db => {
-                return db.all(SMS_QUERY);
+                return db.all(SMS_QUERY, "2018-11-28");
             })
             .catch(err => {
                 console.log(err);
