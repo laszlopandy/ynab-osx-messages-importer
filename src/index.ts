@@ -15,6 +15,7 @@ ORDER BY date DESC
 `
 
 const POS_REGEX = /^Visa Prémium POS tranzakciò ([0-9 ]+)Ft Idöpont: ([0-9\.]+) (?:[0-9:]+) E: ([0-9 ]+)Ft Hely: (.+)$/;
+const UTALAS_REGEX = /^HUF fizetési szàmla \([0-9]+\) utalàs érkezett ([0-9 ]+)Ft ([0-9\.]+) E: ([0-9 ]+)Ft Küldö: (.*) Közl: (.*)$/;
 
 interface SmsRow {
     ROWID: number;
@@ -52,14 +53,23 @@ function main() {
         .then(db => {
             db.each(QUERY, (_, row: SmsRow) => {
                 if (row != null && row.text != null) {
-                    const parts = POS_REGEX.exec(row.text);
-                    if (parts != null) {
+                    let parts;
+                    if ((parts = POS_REGEX.exec(row.text)) != null) {
                         // console.log(parts);
                         const value = parseNumber(parts[1])
                         const timestamp = parts[2];
                         const balance = parseNumber(parts[3]);
                         const place = fixHungarian(parts[4]);
-                        console.log({ value, timestamp, balance, place });
+                        //console.log({ type: "pos", value, timestamp, balance, place });
+                    } else if ((parts = UTALAS_REGEX.exec(row.text)) != null) {
+                        const value = parseNumber(parts[1])
+                        const timestamp = parts[2];
+                        const balance = parseNumber(parts[3]);
+                        const sender = parts[4];
+                        const message = parts[5];
+                        //console.log({ type: "utalas", value, timestamp, balance, sender, message });
+                    } else {
+                        console.log("ERROR cannot match", row.text);
                     }
                 }
             });
