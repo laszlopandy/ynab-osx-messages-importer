@@ -196,6 +196,8 @@ function main() {
     const budgetName = process.argv[3];
     const accountName = process.argv[4];
 
+    console.log("Connecting to YNAB");
+
     const api = new ynab.API(ynabToken);
 
     const budgetPromise = getBudgetByName(api, budgetName);
@@ -203,6 +205,8 @@ function main() {
 
     Promise.all([ budgetPromise, accountPromise ])
         .then(([ budget, account ]) => {
+            console.log("Downloading transactions");
+
             return api.transactions.getTransactionsByAccount(budget.id, account.id)
                 .then((resp: ynab.TransactionsResponse): [ ynab.BudgetSummary, ynab.Account, Array<ynab.TransactionDetail> ] => {
                     return [ budget, account, resp.data.transactions ];
@@ -215,6 +219,8 @@ function main() {
                 latestDate = "2001-01-01";
             }
             const latestDayOfTransactions = lodash.filter(trs, t => t.date === latestDate);
+
+            console.log("Querying all text messages since " + latestDate);
 
             return querySms(latestDate)
                 .then((smsTrs: Array<Transaction>) => {
@@ -231,11 +237,16 @@ function main() {
                             import_id: "BB-SMS-:" + tr.date + ":" + tr.value + ":" + tr.balance,
                         };
                     });
+                    console.log(`Ready to import ${transactions.length} transactions`);
                     return api.transactions.bulkCreateTransactions(budget.id, { transactions });
                 })
+                .then(resp => {
+                    const bulk = resp.data.bulk;
+                    console.log(`Successfully imported ${bulk.transaction_ids.length} transactions (${bulk.duplicate_import_ids.length} duplicates)`);
+                });
         })
         .catch(reason => {
-            console.log("ERROR: " + reason);
+            console.log("ERROR: " + JSON.stringify(reason));
         });
 }
 
