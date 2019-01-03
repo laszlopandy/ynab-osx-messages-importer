@@ -14,9 +14,10 @@ interface Transaction {
     type: 'pos' | 'utalas' | 'allando' | 'csoportos' | 'hitel';
     value: number;
     balance: number;
-    timestamp: string; // ex. 2018.12.24 12:39:06
+    date: string;
     partner: string;
-    message: string;
+    memo: string;
+    time?: string;
 }
 
 const BUDAPEST_BANK_SMS = ["+36303444770", "+36309266245"];
@@ -37,6 +38,10 @@ ORDER BY date ASC
 
 function parseNumber(str: string): number {
     return parseInt(str.replace(/\s/g, ""));
+}
+
+function convertDate(str: string): string {
+    return str.replace(/\./g, "-");
 }
 
 function titleCase(str: string): string {
@@ -61,14 +66,15 @@ function fixHungarian(str: string): string {
 
 const SMS_REGEX: Array<[ RegExp, (parts: Array<string>) => Transaction ]> = [
     [
-        /^Visa Prémium POS tranzakciò ([0-9 ]+)Ft Idöpont: ([0-9\.]+) (?:[0-9:]+) E: ([0-9 ]+)Ft Hely: (.+)$/,
+        /^Visa Prémium POS tranzakciò ([0-9 ]+)Ft Idöpont: ([0-9\.]+) ([0-9:]+) E: ([0-9 ]+)Ft Hely: (.+)$/,
         (parts: Array<string>) => ({
             type: 'pos',
             value: -1 * parseNumber(parts[1]),
-            timestamp: parts[2],
-            balance: parseNumber(parts[3]),
-            partner: fixHungarian(parts[4]),
-            message: ""
+            date: convertDate(parts[2]),
+            balance: parseNumber(parts[4]),
+            partner: fixHungarian(parts[5]),
+            time: parts[3],
+            memo: "",
         })
     ],
     [
@@ -76,10 +82,10 @@ const SMS_REGEX: Array<[ RegExp, (parts: Array<string>) => Transaction ]> = [
         (parts: Array<string>) => ({
             type: 'utalas',
             value: parseNumber(parts[1]),
-            timestamp: parts[2],
+            date: convertDate(parts[2]),
             balance: parseNumber(parts[3]),
             partner: parts[4],
-            message: parts[5],
+            memo: parts[5],
         })
     ],
     [
@@ -87,10 +93,10 @@ const SMS_REGEX: Array<[ RegExp, (parts: Array<string>) => Transaction ]> = [
         (parts: Array<string>) => ({
             type: 'allando',
             value: -1 * parseNumber(parts[1]),
-            timestamp: parts[2],
+            date: convertDate(parts[2]),
             balance: parseNumber(parts[3]),
             partner: parts[4],
-            message: parts[5],
+            memo: parts[5],
         })
     ],
     [
@@ -99,9 +105,9 @@ const SMS_REGEX: Array<[ RegExp, (parts: Array<string>) => Transaction ]> = [
             type: 'csoportos',
             value: -1 * parseNumber(parts[2]),
             partner: parts[3],
-            timestamp: parts[4],
+            date: convertDate(parts[4]),
             balance: parseNumber(parts[5]),
-            message: parts[1] + (parts.length > 6 ? " " + parts[6] : ""),
+            memo: parts[1] + (parts[6] != null ? " " + parts[6] : ""),
         })
     ],
     [
@@ -110,9 +116,9 @@ const SMS_REGEX: Array<[ RegExp, (parts: Array<string>) => Transaction ]> = [
             type: 'hitel',
             value: -1 * parseNumber(parts[2]),
             partner: 'Budapest Bank',
-            timestamp: parts[3],
+            date: convertDate(parts[3]),
             balance: parseNumber(parts[4]),
-            message: parts[1],
+            memo: parts[1],
         })
     ]
 ];
@@ -216,13 +222,13 @@ function main() {
                     const transactions = smsTrs.map((tr: Transaction): ynab.SaveTransaction => {
                         return {
                             account_id: account.id,
-                            date: "",
+                            date: tr.date,
                             amount: tr.value * 1000,
                             payee_name: tr.partner,
-                            memo: tr.message,
+                            memo: tr.memo,
                             cleared: ynab.TransactionDetail.ClearedEnum.Cleared,
                             approved: true,
-                            import_id: "BB-SMS:" + tr.timestamp,
+                            import_id: "BB-SMS-:" + tr.date + ":" + tr.value + ":" + tr.balance,
                         };
                     });
                     return api.transactions.bulkCreateTransactions(budget.id, { transactions });
