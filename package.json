@@ -11,7 +11,9 @@
     "start": "node ./dist/index.js"
   },
   "dependencies": {
+    "@types/lodash": "4.14.119",
     "@types/node": "6.0.118",
+    "lodash": "4.17.11",
     "sqlite": "3.0.0",
     "ynab": "1.9.0"
   }

@@ -1,5 +1,7 @@
 
+import * as lodash from 'lodash';
 import sqlite from 'sqlite';
+import * as ynab from 'ynab';
 
 
 interface SmsRow {
@@ -141,24 +143,94 @@ function processRow(row: SmsRow): Transaction | null {
     return item;
 }
 
+function getBudgetByName(api: ynab.API, budgetName: string): Promise<ynab.BudgetSummary> {
+    return api.budgets.getBudgets()
+        .then(resp => {
+            const b = resp.data.budgets.find(b => b.name == budgetName)
+            if (b != null) {
+                return b;
+            } else {
+                throw Error("Cannot find budget with name: " + budgetName);
+            }
+        })
+}
+
+function getAccountByName(api: ynab.API, budgetPromise: Promise<ynab.BudgetSummary>, accountName: string): Promise<ynab.Account> {
+    return budgetPromise
+        .then(budget => api.accounts.getAccounts(budget.id))
+        .then(resp => {
+            const a = resp.data.accounts.find(a => a.name == accountName);
+            if (a == null) {
+                throw Error("Cannot find account with name: " + accountName);
+            }
+            return a;
+        })
+}
+
+function querySms(startingDate: string): Promise<Array<Transaction>> {
+    return sqlite.open('/Users/laszlopandy/Library/Messages/chat.db', { mode: 1 /* read only */ })
+        .then(db => {
+            return db.all(SMS_QUERY, startingDate)
+                .then((rows: Array<SmsRow>) => {
+                    const transactions = rows.map(processRow).filter(x => x != null) as Array<Transaction>;
+                    db.close();
+                    return transactions;
+                })
+        });
+}
+
+function isCleared(t: ynab.TransactionSummary): boolean {
+    return t.cleared == ynab.TransactionDetail.ClearedEnum.Cleared || t.cleared == ynab.TransactionDetail.ClearedEnum.Reconciled;
+}
+
 function main() {
 
-    sqlite.open('/Users/laszlopandy/Library/Messages/chat.db', { mode: 1 /* read only */ })
-            .then(db => {
-                return db.all(SMS_QUERY, "2018-11-28");
-            })
-            .catch(err => {
-                console.log(err);
-                return [];
-            })
-            .then((rows: Array<SmsRow>) => {
-                return rows.map(processRow).filter(x => x != null) as Array<Transaction>;
-            })
-            .then(transactions => {
-                console.log(transactions.length);
-                console.log(transactions[0]);
-            });
 
+    const ynabToken = process.argv[2];
+    const budgetName = process.argv[3];
+    const accountName = process.argv[4];
+
+    const api = new ynab.API(ynabToken);
+
+    const budgetPromise = getBudgetByName(api, budgetName);
+    const accountPromise = getAccountByName(api, budgetPromise, accountName);
+
+    Promise.all([ budgetPromise, accountPromise ])
+        .then(([ budget, account ]) => {
+            return api.transactions.getTransactionsByAccount(budget.id, account.id)
+                .then((resp: ynab.TransactionsResponse): [ ynab.BudgetSummary, ynab.Account, Array<ynab.TransactionDetail> ] => {
+                    return [ budget, account, resp.data.transactions ];
+                });
+        })
+        .then(([ budget, account, transactions ]) => {
+            const trs = lodash.filter(transactions, isCleared)
+            let latestDate = lodash.max(trs.map(t => t.date));
+            if (latestDate == null) {
+                latestDate = "2001-01-01";
+            }
+            const latestDayOfTransactions = lodash.filter(trs, t => t.date === latestDate);
+
+            return querySms(latestDate)
+                .then((smsTrs: Array<Transaction>) => {
+                    // TODO: remove all SMS transactions which have match in YNAB. Use cleared account balance to verify.
+                    const transactions = smsTrs.map((tr: Transaction): ynab.SaveTransaction => {
+                        return {
+                            account_id: account.id,
+                            date: "",
+                            amount: tr.value * 1000,
+                            payee_name: tr.partner,
+                            memo: tr.message,
+                            cleared: ynab.TransactionDetail.ClearedEnum.Cleared,
+                            approved: true,
+                            import_id: "BB-SMS:" + tr.timestamp,
+                        };
+                    });
+                    return api.transactions.bulkCreateTransactions(budget.id, { transactions });
+                })
+        })
+        .catch(reason => {
+            console.log("ERROR: " + reason);
+        });
 }
 
 if (require.main === module) {
