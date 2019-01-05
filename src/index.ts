@@ -11,13 +11,22 @@ interface SmsRow {
 }
 
 interface Transaction {
-    type: 'pos' | 'utalas' | 'allando' | 'csoportos' | 'hitel';
+    type: 'pos' | 'atm' | 'incoming-transfer' | 'outgoing-transfer' | 'csoportos' | 'hitel';
     value: number;
     balance: number;
     date: string;
     partner: string;
     memo: string;
     time?: string;
+}
+
+interface AccountNames {
+    card: string;
+    cash: string;
+}
+
+type Accounts = {
+    [P in keyof AccountNames]: ynab.Account;
 }
 
 const BUDAPEST_BANK_SMS = ["+36303444770", "+36309266245"];
@@ -78,9 +87,21 @@ const SMS_REGEX: Array<[ RegExp, (parts: Array<string>) => Transaction ]> = [
         })
     ],
     [
+        /^Visa Prémium ATM tranzakciò ([0-9 ]+)Ft Idöpont: ([0-9\.]+) ([0-9:]+) E: ([0-9 ]+)Ft Hely: (.+)$/,
+        (parts: Array<string>) => ({
+            type: 'atm',
+            value: -1 * parseNumber(parts[1]),
+            date: convertDate(parts[2]),
+            balance: parseNumber(parts[4]),
+            partner: 'cash',
+            time: parts[3],
+            memo: fixHungarian(parts[5]),
+        })
+    ],
+    [
         /^HUF fizetési szàmla \([0-9]+\) utalàs érkezett ([0-9 ]+)Ft ([0-9\.]+) E: ([0-9 ]+)Ft Küldö: (.*) Közl: (.*)$/,
         (parts: Array<string>) => ({
-            type: 'utalas',
+            type: 'incoming-transfer',
             value: parseNumber(parts[1]),
             date: convertDate(parts[2]),
             balance: parseNumber(parts[3]),
@@ -89,9 +110,9 @@ const SMS_REGEX: Array<[ RegExp, (parts: Array<string>) => Transaction ]> = [
         })
     ],
     [
-        /^HUF fizetési szàmla \([0-9]+\) àllandò utalàsi megbìzàs teljesült ([0-9 ]+)Ft ([0-9\.]+) E: ([0-9 ]+)Ft Kedv.: (.*) Közl: (.*)$/,
+        /^HUF fizetési szàmla \([0-9]+\) (?:àllandò )?utalàsi megbìzàs teljesült ([0-9 ]+)Ft ([0-9\.]+) E: ([0-9 ]+)Ft Kedv.: (.*) Közl: (.*)$/,
         (parts: Array<string>) => ({
-            type: 'allando',
+            type: 'outgoing-transfer',
             value: -1 * parseNumber(parts[1]),
             date: convertDate(parts[2]),
             balance: parseNumber(parts[3]),
@@ -161,15 +182,22 @@ function getBudgetByName(api: ynab.API, budgetName: string): Promise<ynab.Budget
         })
 }
 
-function getAccountByName(api: ynab.API, budgetPromise: Promise<ynab.BudgetSummary>, accountName: string): Promise<ynab.Account> {
+function getAccountsByName(
+        api: ynab.API, budgetPromise: Promise<ynab.BudgetSummary>, accountNames: AccountNames): Promise<Accounts> {
+
     return budgetPromise
         .then(budget => api.accounts.getAccounts(budget.id))
         .then(resp => {
-            const a = resp.data.accounts.find(a => a.name == accountName);
-            if (a == null) {
-                throw Error("Cannot find account with name: " + accountName);
+            const card = resp.data.accounts.find(a => a.name == accountNames.card);
+            const cash = resp.data.accounts.find(a => a.name == accountNames.cash);
+
+            if (card == null) {
+                throw Error("Cannot find account with name: " + accountNames.card);
             }
-            return a;
+            if (cash == null) {
+                throw Error("Cannot find account with name: " + accountNames.cash);
+            }
+            return { card, cash };
         })
 }
 
@@ -189,54 +217,65 @@ function isCleared(t: ynab.TransactionSummary): boolean {
     return t.cleared == ynab.TransactionDetail.ClearedEnum.Cleared || t.cleared == ynab.TransactionDetail.ClearedEnum.Reconciled;
 }
 
+function createTransaction(accounts: Accounts, tr: Transaction): ynab.SaveTransaction {
+
+    const base = {
+        account_id: accounts.card.id,
+        date: tr.date,
+        amount: tr.value * 1000,
+        cleared: ynab.TransactionDetail.ClearedEnum.Cleared,
+        import_id: "BB-SMS-:" + tr.date + ":" + tr.value + ":" + tr.balance,
+        approved: true,
+        memo: tr.memo,
+    };
+
+    if (tr.type === 'atm') {
+        return {
+            ...base,
+            payee_id: accounts.cash.transfer_payee_id,
+        }
+    } else {
+        return {
+            ...base,
+            payee_name: tr.partner,
+        };
+    }
+}
+
 function main() {
-
-
     const ynabToken = process.argv[2];
     const budgetName = process.argv[3];
     const accountName = process.argv[4];
+    const cashAccountName = process.argv[5];
 
     console.log("Connecting to YNAB");
 
     const api = new ynab.API(ynabToken);
 
     const budgetPromise = getBudgetByName(api, budgetName);
-    const accountPromise = getAccountByName(api, budgetPromise, accountName);
+    const accountsPromise = getAccountsByName(api, budgetPromise, { card: accountName, cash: cashAccountName });
 
-    Promise.all([ budgetPromise, accountPromise ])
-        .then(([ budget, account ]) => {
+    Promise.all([ budgetPromise, accountsPromise ])
+        .then(([ budget, accounts ]) => {
             console.log("Downloading transactions");
 
-            return api.transactions.getTransactionsByAccount(budget.id, account.id)
-                .then((resp: ynab.TransactionsResponse): [ ynab.BudgetSummary, ynab.Account, Array<ynab.TransactionDetail> ] => {
-                    return [ budget, account, resp.data.transactions ];
+            return api.transactions.getTransactionsByAccount(budget.id, accounts.card.id)
+                .then((resp: ynab.TransactionsResponse): [ ynab.BudgetSummary, Accounts, Array<ynab.TransactionDetail> ] => {
+                    return [ budget, accounts, resp.data.transactions ];
                 });
         })
-        .then(([ budget, account, transactions ]) => {
+        .then(([ budget, accounts, transactions ]) => {
             const trs = lodash.filter(transactions, isCleared)
             let latestDate = lodash.max(trs.map(t => t.date));
             if (latestDate == null) {
                 latestDate = "2001-01-01";
             }
-            const latestDayOfTransactions = lodash.filter(trs, t => t.date === latestDate);
 
             console.log("Querying all text messages since " + latestDate);
 
             return querySms(latestDate)
                 .then((smsTrs: Array<Transaction>) => {
-                    // TODO: remove all SMS transactions which have match in YNAB. Use cleared account balance to verify.
-                    const transactions = smsTrs.map((tr: Transaction): ynab.SaveTransaction => {
-                        return {
-                            account_id: account.id,
-                            date: tr.date,
-                            amount: tr.value * 1000,
-                            payee_name: tr.partner,
-                            memo: tr.memo,
-                            cleared: ynab.TransactionDetail.ClearedEnum.Cleared,
-                            approved: true,
-                            import_id: "BB-SMS-:" + tr.date + ":" + tr.value + ":" + tr.balance,
-                        };
-                    });
+                    const transactions = smsTrs.map(tr => createTransaction(accounts, tr));
                     console.log(`Ready to import ${transactions.length} transactions`);
                     return api.transactions.bulkCreateTransactions(budget.id, { transactions });
                 })
