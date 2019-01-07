@@ -216,7 +216,7 @@ function getAccountsByName(
         })
 }
 
-function querySms(bankSmsNumbers: Array<string>, startingDate: string): Promise<Array<Transaction>> {
+async function querySms(bankSmsNumbers: Array<string>, startingDate: string): Promise<Array<Transaction>> {
     const home = process.env['HOME'];
     if (home == null) {
         throw new Error("Cannot locate iMessage database (no HOME in env)");
@@ -224,15 +224,12 @@ function querySms(bankSmsNumbers: Array<string>, startingDate: string): Promise<
 
     const query = makeQuery(bankSmsNumbers);
 
-    return sqlite.open(path.join(home, 'Library/Messages/chat.db'), { mode: 1 /* read only */ })
-        .then(db => {
-            return db.all(query, startingDate)
-                .then((rows: Array<SmsRow>) => {
-                    const transactions = rows.map(processRow).filter(x => x != null) as Array<Transaction>;
-                    db.close();
-                    return transactions;
-                })
-        });
+    const db = await sqlite.open(path.join(home, 'Library/Messages/chat.db'), { mode: 1 /* read only */ });
+    const rows: Array<SmsRow> = await db.all(query, startingDate);
+    const transactions = rows.map(processRow).filter(x => x != null) as Array<Transaction>;
+    db.close();
+
+    return transactions;
 }
 
 function isCleared(t: ynab.TransactionSummary): boolean {
