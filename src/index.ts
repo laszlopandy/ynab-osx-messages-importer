@@ -1,5 +1,7 @@
 
+import * as fs from 'fs';
 import * as lodash from 'lodash';
+import * as path from 'path';
 import sqlite from 'sqlite';
 import * as ynab from 'ynab';
 
@@ -29,21 +31,13 @@ type Accounts = {
     [P in keyof AccountNames]: ynab.Account;
 }
 
-const BUDAPEST_BANK_SMS = ["+36303444770", "+36309266245"];
-const SMS_QUERY = `
-SELECT
-    rowid,
-    text,
-    datetime(date/1000000000 + strftime('%s','2001-01-01'), 'unixepoch', 'localtime') as date_
-FROM message
-WHERE
-    handle_id in
-        (SELECT rowid from handle WHERE id in
-            (${BUDAPEST_BANK_SMS.map(x => '"' + x + '"').join(', ')})
-        )
-    AND date_ >= date(?)
-ORDER BY date ASC
-`
+interface Config {
+    ynab_token: string;
+    budget_name: string;
+    primary_account_name: string;
+    cash_account_name: string;
+    bank_sms_numbers: Array<string>;
+}
 
 function parseNumber(str: string): number {
     return parseInt(str.replace(/\s/g, ""));
@@ -150,6 +144,27 @@ function shouldSkip(text: string): boolean {
     return SIKERTELEN.test(text);
 }
 
+function makeQuery(bankSmsNumbers: Array<string>): string {
+    if (!bankSmsNumbers.every(n => /^\+[0-9]+$/.test(n))) {
+        throw new Error("Bank SMS numbers must start with '+' and be followed only by numbers.");
+    }
+
+    const clause = bankSmsNumbers.map(x => '"' + x + '"').join(', ')
+    return `
+SELECT
+    rowid,
+    text,
+    datetime(date/1000000000 + strftime('%s','2001-01-01'), 'unixepoch', 'localtime') as date_
+FROM message
+WHERE
+    handle_id in
+        (SELECT rowid from handle WHERE id in (${clause}))
+    AND date_ >= date(?)
+ORDER BY date ASC
+`
+
+}
+
 function processRow(row: SmsRow): Transaction | null {
     let item = null;
     if (row != null && row.text != null && !shouldSkip(row.text)) {
@@ -201,10 +216,17 @@ function getAccountsByName(
         })
 }
 
-function querySms(startingDate: string): Promise<Array<Transaction>> {
-    return sqlite.open('/Users/laszlopandy/Library/Messages/chat.db', { mode: 1 /* read only */ })
+function querySms(bankSmsNumbers: Array<string>, startingDate: string): Promise<Array<Transaction>> {
+    const home = process.env['HOME'];
+    if (home == null) {
+        throw new Error("Cannot locate iMessage database (no HOME in env)");
+    }
+
+    const query = makeQuery(bankSmsNumbers);
+
+    return sqlite.open(path.join(home, 'Library/Messages/chat.db'), { mode: 1 /* read only */ })
         .then(db => {
-            return db.all(SMS_QUERY, startingDate)
+            return db.all(query, startingDate)
                 .then((rows: Array<SmsRow>) => {
                     const transactions = rows.map(processRow).filter(x => x != null) as Array<Transaction>;
                     db.close();
@@ -243,17 +265,15 @@ function createTransaction(accounts: Accounts, tr: Transaction): ynab.SaveTransa
 }
 
 function main() {
-    const ynabToken = process.argv[2];
-    const budgetName = process.argv[3];
-    const accountName = process.argv[4];
-    const cashAccountName = process.argv[5];
+    const config: Config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 
     console.log("Connecting to YNAB");
 
-    const api = new ynab.API(ynabToken);
+    const api = new ynab.API(config.ynab_token);
 
-    const budgetPromise = getBudgetByName(api, budgetName);
-    const accountsPromise = getAccountsByName(api, budgetPromise, { card: accountName, cash: cashAccountName });
+    const budgetPromise = getBudgetByName(api, config.budget_name);
+    const accountsPromise = getAccountsByName(api, budgetPromise,
+                { card: config.primary_account_name, cash: config.cash_account_name });
 
     Promise.all([ budgetPromise, accountsPromise ])
         .then(([ budget, accounts ]) => {
@@ -273,7 +293,7 @@ function main() {
 
             console.log("Querying all text messages since " + latestDate);
 
-            return querySms(latestDate)
+            return querySms(config.bank_sms_numbers, latestDate)
                 .then((smsTrs: Array<Transaction>) => {
                     const transactions = smsTrs.map(tr => createTransaction(accounts, tr));
                     console.log(`Ready to import ${transactions.length} transactions`);
@@ -285,7 +305,8 @@ function main() {
                 });
         })
         .catch(reason => {
-            console.log("ERROR: " + JSON.stringify(reason));
+            const message = (reason instanceof Error) ? reason.toString() : "Error:" + JSON.stringify(reason);
+            console.log(message);
         });
 }
 
