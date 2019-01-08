@@ -293,7 +293,11 @@ function main() {
             return querySms(config.bank_sms_numbers, latestDate)
                 .then((smsTrs: Array<Transaction>) => {
                     const transactions = smsTrs.map(tr => createTransaction(accounts, tr));
-                    console.log(`Ready to import ${transactions.length} transactions`);
+
+                    console.log(`Ready to import ${transactions.length} transactions:`);
+                    transactions.forEach(tr => console.log(tr));
+                    console.log("");
+
                     return api.transactions.bulkCreateTransactions(budget.id, { transactions });
                 })
                 .then(resp => {
