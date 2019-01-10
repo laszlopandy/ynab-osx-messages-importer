@@ -11,7 +11,7 @@ Presumably for privacy reasons, iOS doesn't allow apps to access SMSes. To acces
 
 ## Example config
 Create a file `my-config.json` with your relevant YNAB details:
-```json
+```js
 {
     /* The private YNAB token from your account page */
     "ynab_token": "...",
