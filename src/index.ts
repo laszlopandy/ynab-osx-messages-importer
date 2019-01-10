@@ -288,7 +288,7 @@ function main() {
                 latestDate = "2001-01-01";
             }
 
-            console.log("Querying all text messages since " + latestDate);
+            console.log("Querying all SMS messages since " + latestDate);
 
             return querySms(config.bank_sms_numbers, latestDate)
                 .then((smsTrs: Array<Transaction>) => {

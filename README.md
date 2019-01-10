@@ -2,9 +2,9 @@
 
 My bank doesn't provide an API, however it does send an SMS for every transactions on my account. With a few regular expressions, we can turn it into data that we can import into YNAB.
 
-## Recieving SMSes on your Mac
+## Recieving SMS messages on your Mac
 
-Presumably for privacy reasons, iOS doesn't allow apps to access SMSes. To access them programmatically:
+Presumably for privacy reasons, iOS doesn't allow apps to access SMS messages. To access them programmatically we have to use a Mac:
 
  * Enable `Text Message Forwarding` on your iPhone: https://support.apple.com/en-us/HT208386
  * Login to the Messages app on your Mac (using the same Apple ID as your phone).
@@ -32,7 +32,7 @@ $ npm install
 $ node ./dist/index.js my-config.json
 Connecting to YNAB
 Downloading transactions
-Querying all text messages since 2019-01-10
+Querying all SMS messages since 2019-01-10
 Ready to import 4 transactions:
 ...
 
