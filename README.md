@@ -1,6 +1,6 @@
 # YNAB Messages Importer
 
-My bank doesn't provide an API, however it does send an SMS for every transactions on my account. With a few regular expressions, we can turn it into data that we can import into YNAB.
+My bank doesn't provide an API, however it does send an SMS for every transaction on my account. With a few regular expressions, we can turn it into data that we can import into YNAB.
 
 ## Recieving SMS messages on your Mac
 
