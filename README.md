@@ -7,7 +7,7 @@ My bank doesn't provide an API, however it does send an SMS for every transactio
 Presumably for privacy reasons, iOS doesn't allow apps to access SMS messages. To access them programmatically we have to use a Mac:
 
  * Enable `Text Message Forwarding` on your iPhone: https://support.apple.com/en-us/HT208386
- * Login to the Messages app on your Mac (using the same Apple ID as your phone).
+ * Login to the Messages app on your Mac using the same Apple ID as your phone.
 
 ## Example config
 Create a file `my-config.json` with your relevant YNAB details:
