@@ -1,14 +1,16 @@
 {
-  "private": true,
   "name": "ynab-sms",
   "version": "1.0.0",
-  "description": "",
+  "description": "Import transactions to YNAB from SMS messages on Mac",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/laszlopandy/ynab-osx-messages-importer.git"
+  },
   "main": "index.js",
   "author": "Laszlo Pandy <laszlok2@gmail.com>",
   "license": "MIT",
   "scripts": {
-    "install": "tsc",
-    "start": "node ./dist/index.js"
+    "install": "./node_modules/typescript/bin/tsc"
   },
   "dependencies": {
     "@types/lodash": "4.14.119",
@@ -16,5 +18,8 @@
     "lodash": "4.17.11",
     "sqlite": "3.0.0",
     "ynab": "1.9.0"
+  },
+  "devDependencies": {
+    "typescript": "3.2.2"
   }
 }
