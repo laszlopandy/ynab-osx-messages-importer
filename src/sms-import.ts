@@ -4,6 +4,7 @@ import * as lodash from 'lodash';
 import * as path from 'path';
 import sqlite from 'sqlite';
 import * as ynab from 'ynab';
+import { findByName, getBudgetAccountsTransactions, isCleared } from './helpers';
 
 
 interface SmsRow {
@@ -185,37 +186,6 @@ function processRow(row: SmsRow): Transaction | null {
     return item;
 }
 
-function getBudgetByName(api: ynab.API, budgetName: string): Promise<ynab.BudgetSummary> {
-    return api.budgets.getBudgets()
-        .then(resp => {
-            const b = resp.data.budgets.find(b => b.name == budgetName)
-            if (b != null) {
-                return b;
-            } else {
-                throw Error("Cannot find budget with name: " + budgetName);
-            }
-        })
-}
-
-function getAccountsByName(
-        api: ynab.API, budgetPromise: Promise<ynab.BudgetSummary>, accountNames: AccountNames): Promise<Accounts> {
-
-    return budgetPromise
-        .then(budget => api.accounts.getAccounts(budget.id))
-        .then(resp => {
-            const card = resp.data.accounts.find(a => a.name == accountNames.card);
-            const cash = resp.data.accounts.find(a => a.name == accountNames.cash);
-
-            if (card == null) {
-                throw Error("Cannot find account with name: " + accountNames.card);
-            }
-            if (cash == null) {
-                throw Error("Cannot find account with name: " + accountNames.cash);
-            }
-            return { card, cash };
-        })
-}
-
 async function querySms(bankSmsNumbers: Array<string>, startingDate: string): Promise<Array<Transaction>> {
     const home = process.env['HOME'];
     if (home == null) {
@@ -230,10 +200,6 @@ async function querySms(bankSmsNumbers: Array<string>, startingDate: string): Pr
     db.close();
 
     return transactions;
-}
-
-function isCleared(t: ynab.TransactionSummary): boolean {
-    return t.cleared == ynab.TransactionDetail.ClearedEnum.Cleared || t.cleared == ynab.TransactionDetail.ClearedEnum.Reconciled;
 }
 
 function createTransaction(accounts: Accounts, tr: Transaction): ynab.SaveTransaction {
@@ -268,19 +234,7 @@ function main() {
 
     const api = new ynab.API(config.ynab_token);
 
-    const budgetPromise = getBudgetByName(api, config.budget_name);
-    const accountsPromise = getAccountsByName(api, budgetPromise,
-                { card: config.primary_account_name, cash: config.cash_account_name });
-
-    Promise.all([ budgetPromise, accountsPromise ])
-        .then(([ budget, accounts ]) => {
-            console.log("Downloading transactions");
-
-            return api.transactions.getTransactionsByAccount(budget.id, accounts.card.id)
-                .then((resp: ynab.TransactionsResponse): [ ynab.BudgetSummary, Accounts, Array<ynab.TransactionDetail> ] => {
-                    return [ budget, accounts, resp.data.transactions ];
-                });
-        })
+    getBudgetAccountsTransactions(api, config.budget_name, config.primary_account_name)
         .then(([ budget, accounts, transactions ]) => {
             const trs = lodash.filter(transactions, isCleared)
             let latestDate = lodash.max(trs.map(t => t.date));
@@ -292,7 +246,11 @@ function main() {
 
             return querySms(config.bank_sms_numbers, latestDate)
                 .then((smsTrs: Array<Transaction>) => {
-                    const transactions = smsTrs.map(tr => createTransaction(accounts, tr));
+                    const accountPair = {
+                        cash: findByName(accounts, config.cash_account_name),
+                        card: findByName(accounts, config.primary_account_name),
+                    };
+                    const transactions = smsTrs.map(tr => createTransaction(accountPair, tr));
 
                     console.log(`Ready to import ${transactions.length} transactions:`);
                     transactions.forEach(tr => console.log(tr));
