@@ -21,8 +21,6 @@ Create a file `my-config.json` with your relevant YNAB details:
     "sms_account_name": "My YNAB bank account",
     /* The YNAB account where ATM withdrawals will be transfered */
     "cash_account_name": "My YNAB cash account",
-    /* The phone numbers that should be queried in the Messages app */
-    "bank_sms_numbers": ["+36301234567"]
 }
 ```
 
