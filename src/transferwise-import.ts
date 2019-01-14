@@ -70,6 +70,10 @@ function getBalances(token: string, profileId: number): Promise<Map<string, numb
 }
 
 function getRate(token: string, source: string, target: string, date?: string): Promise<number> {
+    if (source === target) {
+        return Promise.resolve(1);
+    }
+
     let url = `https://api.transferwise.com/v1/rates?source=${source}&target=${target}`;
     if (/^\d\d\d\d-\d\d-\d\d$/.test(date || "")) {
         url += `&${date}T12:00`;
