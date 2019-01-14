@@ -13,14 +13,15 @@ interface SmsRow {
     date_: string;
 }
 
+const CASH_WITHDRAWAL_PARTNER = "__cash";
+
 interface Transaction {
-    type: 'pos' | 'atm' | 'incoming-transfer' | 'outgoing-transfer' | 'csoportos' | 'hitel';
+    type: string;
     value: number;
     balance: number;
     date: string;
     partner: string;
     memo: string;
-    time?: string;
 }
 
 interface Config {
@@ -73,7 +74,7 @@ const SMS_REGEX: Array<[ RegExp, (parts: Array<string>) => Transaction | null ]>
             value: -1 * parseNumber(parts[1]),
             date: convertDate(parts[2]),
             balance: parseNumber(parts[4]),
-            partner: 'cash',
+            partner: CASH_WITHDRAWAL_PARTNER,
             time: parts[3],
             memo: fixHungarian(parts[5]),
         })
@@ -192,7 +193,7 @@ function createTransaction(smsAccount: ynab.Account, cashAccount: ynab.Account, 
         memo: tr.memo,
     };
 
-    if (tr.type === 'atm') {
+    if (tr.partner === CASH_WITHDRAWAL_PARTNER) {
         return {
             ...base,
             payee_id: cashAccount.transfer_payee_id,
