@@ -1,9 +1,9 @@
 
-import fetch from 'node-fetch';
 import * as fs from 'fs';
-import * as ynab from 'ynab';
-import { getBudgetAccountsTransactions, isCleared, findByName } from './helpers/ynab';
 import * as lodash from 'lodash';
+import * as ynab from 'ynab';
+import { getBalances, getRate } from './helpers/transferwise';
+import { getBudgetAccountsTransactions, isCleared, findByName } from './helpers/ynab';
 
 
 interface Config {
@@ -15,83 +15,13 @@ interface Config {
     currency_fluctuation_payee: string;
 }
 
-type BorderlessAccountResponse = Array<{
-    profileId: number;
-    balances: Array<{
-        amount: {
-            value: number,
-            currency: string
-        }
-    }>;
-}>
-
-type ProfileResponse = Array<{ id: number, type: string }>;
-
-type RateResponse = Array<{ rate: number }>;
-
-function fetchWithToken(token: string, url: string): Promise<any> {
-    return fetch(url,
-        {
-            method: "GET",
-            headers: {
-                "Authorization": `Bearer ${token}`
-            }
-        })
-        .then(response => response.json());
-}
-
-function getProfileId(token: string): Promise<number> {
-
-    return fetchWithToken(token, "https://api.transferwise.com/v1/profiles")
-        .then((list: ProfileResponse) => {
-            const profile = list.find(x => x.type === "personal");
-            if (profile == null) {
-                throw Error("Cannot get personal Transferwise profile ID");
-            }
-            return profile.id;
-        });
-}
-
-function getBalances(token: string, profileId: number): Promise<Map<string, number>> {
-    return fetchWithToken(token, `https://api.transferwise.com/v1/borderless-accounts?profileId=${profileId}`)
-        .then((resp: BorderlessAccountResponse) => {
-            const account = resp.find(x => x.profileId === profileId);
-            if (account == null) {
-                throw Error("Cannot match profileId in account response");
-            }
-            const dict = new Map();
-            account.balances.map(b => [b.amount.currency, b.amount.value * 1000])
-                .forEach(([ currency, value ]) => {
-                    let old = dict.has(currency) ? dict.get(currency) : 0;
-                    dict.set(currency, old + value);
-                });
-            return dict;
-        });
-}
-
-function getRate(token: string, source: string, target: string, date?: string): Promise<number> {
-    if (source === target) {
-        return Promise.resolve(1);
-    }
-
-    let url = `https://api.transferwise.com/v1/rates?source=${source}&target=${target}`;
-    if (/^\d\d\d\d-\d\d-\d\d$/.test(date || "")) {
-        url += `&${date}T12:00`;
-    }
-    return fetchWithToken(token, url)
-        .then((resp: RateResponse) => {
-            return resp[0].rate;
-        });
-}
-
 function main() {
     const config: Config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 
     const token = config.transferwise_token;
     const target_currency = config.budget_currency;
 
-    const valueSumPromise = getProfileId(token)
-        .then(id => getBalances(token, id))
+    const valueSumPromise = getBalances(token)
         .then(balances => {
             console.log("Transferwise balances:");
             balances.forEach((value, currency) => {
@@ -101,9 +31,7 @@ function main() {
             return Promise.all(
                 Array.from(balances).map(([currency, value]) => {
                     return getRate(token, currency, target_currency)
-                        .then(rate => {
-                            return Math.round(rate * value);
-                        });
+                        .then(rate => Math.round(rate * value));
                 })
             );
         })
