@@ -60,7 +60,7 @@ function getBalances(token: string, profileId: number): Promise<Map<string, numb
                 throw Error("Cannot match profileId in account response");
             }
             const dict = new Map();
-            account.balances.map(b => [b.amount.currency, b.amount.value])
+            account.balances.map(b => [b.amount.currency, b.amount.value * 1000])
                 .forEach(([ currency, value ]) => {
                     let old = dict.has(currency) ? dict.get(currency) : 0;
                     dict.set(currency, old + value);
@@ -95,20 +95,19 @@ function main() {
         .then(balances => {
             console.log("Transferwise balances:");
             balances.forEach((value, currency) => {
-                console.log(`\t- ${currency}: ${value.toFixed(2)}`);
+                console.log(`\t- ${currency}: ${ynab.utils.convertMilliUnitsToCurrencyAmount(value)}`);
             });
 
             return Promise.all(
                 Array.from(balances).map(([currency, value]) => {
                     return getRate(token, currency, target_currency)
                         .then(rate => {
-                            return rate * value;
+                            return Math.round(rate * value);
                         });
                 })
             );
         })
-        .then(totals => totals.reduce((a, b) => a + b, 0))
-        .then(sum => Math.floor(sum));
+        .then(totals => totals.reduce((a, b) => a + b, 0));
 
     const ynabAPI = new ynab.API(config.ynab_token);
     const budgetAccountsTransactions = getBudgetAccountsTransactions(
@@ -121,8 +120,12 @@ function main() {
 
     Promise.all([valueSumPromise, budgetAccountsTransactions])
         .then(([sum, [budget, accounts, transactions]]): Promise<ynab.TransactionDetail> => {
+            if (sum !== Math.round(sum)) {
+                throw Error("Assertion error: sum should be an integer in milliunits");
+            }
+
             const account = findByName(accounts, config.transferwise_account_name);
-            const diff = (sum * 1000) - account.cleared_balance;
+            const diff = sum - account.cleared_balance;
             const currencyTr = lodash.maxBy(
                 transactions.filter(isCleared).filter(isCurrencyFluctuation),
                 tr => tr.date);
