@@ -27,7 +27,7 @@ Create a file `my-config.json` with your relevant YNAB details:
 ## Usage
 ```sh
 $ npm install
-$ node ./dist/index.js my-config.json
+$ node ./dist/sms-import.js my-config.json
 Connecting to YNAB
 Downloading transactions
 Querying all SMS messages since 2019-01-10
