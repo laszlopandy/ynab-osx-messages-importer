@@ -4,7 +4,7 @@ import * as lodash from 'lodash';
 import * as path from 'path';
 import sqlite from 'sqlite';
 import * as ynab from 'ynab';
-import { findByName, getBudgetAccountsTransactions, isCleared } from './helpers';
+import { findByName, getBudgetAccountsTransactions, isCleared } from './helpers/ynab';
 
 
 interface SmsRow {

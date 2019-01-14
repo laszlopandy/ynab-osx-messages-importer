@@ -2,7 +2,7 @@
 import fetch from 'node-fetch';
 import * as fs from 'fs';
 import * as ynab from 'ynab';
-import { getBudgetAccountsTransactions, isCleared, findByName } from './helpers';
+import { getBudgetAccountsTransactions, isCleared, findByName } from './helpers/ynab';
 import * as lodash from 'lodash';
 
 
