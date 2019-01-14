@@ -39,12 +39,6 @@ function convertDate(str: string): string {
     return str.replace(/\./g, "-");
 }
 
-function titleCase(str: string): string {
-    return str.split(' ')
-        .map(w => w[0].toUpperCase() + w.substr(1).toLowerCase())
-        .join(' ');
-}
-
 function fixHungarian(str: string): string {
     // áéíóú öü őű
     return str
@@ -59,7 +53,7 @@ function fixHungarian(str: string): string {
         .replace(/u"/g, 'ű').replace(/U"/g, 'Ű');
 }
 
-const SMS_REGEX: Array<[ RegExp, (parts: Array<string>) => Transaction ]> = [
+const SMS_REGEX: Array<[ RegExp, (parts: Array<string>) => Transaction | null ]> = [
     [
         /^Visa Prémium POS tranzakciò ([0-9 ]+)Ft Idöpont: ([0-9\.]+) ([0-9:]+) E: ([0-9 ]+)Ft Hely: (.+)$/,
         (parts: Array<string>) => ({
@@ -127,14 +121,12 @@ const SMS_REGEX: Array<[ RegExp, (parts: Array<string>) => Transaction ]> = [
             balance: parseNumber(parts[4]),
             memo: parts[1],
         })
-    ]
+    ],
+    [
+        /^Sikertelen Visa Prémium POS/,
+        () => null,
+    ],
 ];
-
-const SIKERTELEN = /^Sikertelen Visa Prémium POS/;
-
-function shouldSkip(text: string): boolean {
-    return SIKERTELEN.test(text);
-}
 
 function makeQuery(bankSmsNumbers: Array<string>): string {
     if (!bankSmsNumbers.every(n => /^\+[0-9]+$/.test(n))) {
@@ -158,23 +150,18 @@ ORDER BY date ASC
 }
 
 function processRow(row: SmsRow): Transaction | null {
-    let item = null;
-    if (row != null && row.text != null && !shouldSkip(row.text)) {
+    if (row == null || row.text == null) {
+        throw Error("Query returned a null row")
+    } else {
         for (const [regex, func] of SMS_REGEX) {
             const parts = regex.exec(row.text);
             if (parts != null) {
-                item = func(parts);
-                //console.log(item);
-                break;
+                return func(parts);
             }
         }
 
-        if (item == null) {
-            console.log("ERROR cannot match", row.text);
-        }
+        throw Error("Cannot match SMS: " + row.text);
     }
-
-    return item;
 }
 
 async function querySms(bankSmsNumbers: Array<string>, startingDate: string): Promise<Array<Transaction>> {
