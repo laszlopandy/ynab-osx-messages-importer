@@ -18,7 +18,7 @@ Create a file `my-config.json` with your relevant YNAB details:
     /* The name of your budget in YNAB */
     "budget_name": "My Budget",
     /* The YNAB account where the SMS transactions will be imported */
-    "primary_account_name": "My YNAB bank account",
+    "sms_account_name": "My YNAB bank account",
     /* The YNAB account where ATM withdrawals will be transfered */
     "cash_account_name": "My YNAB cash account",
     /* The phone numbers that should be queried in the Messages app */

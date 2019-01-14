@@ -23,19 +23,10 @@ interface Transaction {
     time?: string;
 }
 
-interface AccountNames {
-    card: string;
-    cash: string;
-}
-
-type Accounts = {
-    [P in keyof AccountNames]: ynab.Account;
-}
-
 interface Config {
     ynab_token: string;
     budget_name: string;
-    primary_account_name: string;
+    sms_account_name: string;
     cash_account_name: string;
     bank_sms_numbers: Array<string>;
 }
@@ -202,10 +193,10 @@ async function querySms(bankSmsNumbers: Array<string>, startingDate: string): Pr
     return transactions;
 }
 
-function createTransaction(accounts: Accounts, tr: Transaction): ynab.SaveTransaction {
+function createTransaction(smsAccount: ynab.Account, cashAccount: ynab.Account, tr: Transaction): ynab.SaveTransaction {
 
     const base = {
-        account_id: accounts.card.id,
+        account_id: smsAccount.id,
         date: tr.date,
         amount: tr.value * 1000,
         cleared: ynab.TransactionDetail.ClearedEnum.Cleared,
@@ -217,7 +208,7 @@ function createTransaction(accounts: Accounts, tr: Transaction): ynab.SaveTransa
     if (tr.type === 'atm') {
         return {
             ...base,
-            payee_id: accounts.cash.transfer_payee_id,
+            payee_id: cashAccount.transfer_payee_id,
         }
     } else {
         return {
@@ -234,7 +225,7 @@ function main() {
 
     const api = new ynab.API(config.ynab_token);
 
-    getBudgetAccountsTransactions(api, config.budget_name, config.primary_account_name)
+    getBudgetAccountsTransactions(api, config.budget_name, config.sms_account_name)
         .then(([ budget, accounts, transactions ]) => {
             const trs = lodash.filter(transactions, isCleared)
             let latestDate = lodash.max(trs.map(t => t.date));
@@ -246,11 +237,9 @@ function main() {
 
             return querySms(config.bank_sms_numbers, latestDate)
                 .then((smsTrs: Array<Transaction>) => {
-                    const accountPair = {
-                        cash: findByName(accounts, config.cash_account_name),
-                        card: findByName(accounts, config.primary_account_name),
-                    };
-                    const transactions = smsTrs.map(tr => createTransaction(accountPair, tr));
+                    const cashAccount = findByName(accounts, config.cash_account_name);
+                    const smsAccount = findByName(accounts, config.sms_account_name);
+                    const transactions = smsTrs.map(tr => createTransaction(smsAccount, cashAccount, tr));
 
                     console.log(`Ready to import ${transactions.length} transactions:`);
                     transactions.forEach(tr => console.log(tr));
