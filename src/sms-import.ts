@@ -4,7 +4,7 @@ import * as lodash from 'lodash';
 import * as path from 'path';
 import sqlite from 'sqlite';
 import * as ynab from 'ynab';
-import { CASH_WITHDRAWAL_PARTNER, Transaction, BankParser, SmsParser } from './common';
+import { CASH_WITHDRAWAL_PARTNER, Transaction, BankParser, SmsParser, logError } from './common';
 import { findByName, getBudgetAccountsTransactions, isCleared } from './helpers/ynab';
 import { getBudapestBank } from './sms-parsing/budapest-bank';
 
@@ -133,10 +133,7 @@ function main() {
                     console.log(`Successfully imported ${bulk.transaction_ids.length} transactions (${bulk.duplicate_import_ids.length} duplicates)`);
                 });
         })
-        .catch(reason => {
-            const message = (reason instanceof Error) ? reason.toString() : "Error:" + JSON.stringify(reason);
-            console.log(message);
-        });
+        .catch(logError);
 }
 
 if (require.main === module) {

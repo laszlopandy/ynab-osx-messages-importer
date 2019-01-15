@@ -5,6 +5,7 @@ import * as ynab from 'ynab';
 import { getBalances, getRate } from './helpers/transferwise';
 import { getBudgetAccountsTransactions, isCleared, findByName } from './helpers/ynab';
 import { updateCurrencyFluctuation, sumCurrencies } from './helpers/currency-fluctuations';
+import { logError } from './common';
 
 
 interface Config {
@@ -19,17 +20,14 @@ interface Config {
 function main() {
     const config: Config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 
-    const token = config.transferwise_token;
-    const target_currency = config.budget_currency;
-
-    const valueSumPromise = getBalances(token)
+    const valueSumPromise = getBalances(config.transferwise_token)
         .then(balances => {
             console.log("Transferwise balances:");
             balances.forEach((value, currency) => {
                 console.log(`\t- ${currency}: ${ynab.utils.convertMilliUnitsToCurrencyAmount(value)}`);
             });
 
-            return sumCurrencies(token, target_currency, balances);
+            return sumCurrencies(config.transferwise_token, config.budget_currency, balances);
         })
 
     const ynabAPI = new ynab.API(config.ynab_token);
@@ -49,10 +47,7 @@ function main() {
                     sum
                 );
         })
-        .catch((reason: any) => {
-            const message = (reason instanceof Error) ? reason.toString() : "Error:" + JSON.stringify(reason);
-            console.log(message);
-        });
+        .catch(logError);
 }
 
 if (require.main === module) {

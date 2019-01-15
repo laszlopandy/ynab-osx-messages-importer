@@ -16,3 +16,8 @@ export type BankParser = {
     smsParsers: Array<SmsParser>,
     smsNumbers: Array<string>,
 };
+
+export function logError(reason: any) {
+    const message = (reason instanceof Error) ? reason.toString() : "Error:" + JSON.stringify(reason);
+    console.log(message);
+};
