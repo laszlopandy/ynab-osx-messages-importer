@@ -62,5 +62,6 @@
   "include": [
     "src/sms-import.ts",
     "src/transferwise-import.ts",
+    "src/update-foreign-currency.ts",
   ]
 }

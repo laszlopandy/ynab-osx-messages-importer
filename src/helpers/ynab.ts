@@ -1,6 +1,6 @@
 import * as ynab from 'ynab';
 
-function getBudgetByName(api: ynab.API, budgetName: string): Promise<ynab.BudgetSummary> {
+export function getBudgetByName(api: ynab.API, budgetName: string): Promise<ynab.BudgetSummary> {
     return api.budgets.getBudgets()
         .then(resp => {
             const b = resp.data.budgets.find(b => b.name == budgetName)
@@ -12,7 +12,7 @@ function getBudgetByName(api: ynab.API, budgetName: string): Promise<ynab.Budget
         })
 }
 
-function getAccounts(
+export function getAccounts(
         api: ynab.API, budgetPromise: Promise<ynab.BudgetSummary>): Promise<Array<ynab.Account>> {
 
     return budgetPromise
