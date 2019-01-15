@@ -26,7 +26,7 @@ function inputBalance(accountName: string, currency: string): Promise<number> {
     .then(s => {
         rl.close();
 
-        const list = s.split(",").map(parseFloat)
+        const list = s.split("+").map(x => x.replace(/,/, "")).map(parseFloat)
         const sum = list.reduce((a, b) => a + b, 0);
         if (!isFinite(sum)) {
             throw new Error("cannot parse number");
