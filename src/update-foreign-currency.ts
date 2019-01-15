@@ -60,18 +60,25 @@ function main() {
             return balances;
         });
 
-    Promise.all([balancesPromise, budgetPromise, accountsPromise])
-        .then(([balances, budget, accounts]) => {
+    const currencies = new Set(Object.keys(config.foreign_currency_accounts).map(k => config.foreign_currency_accounts[k]));
+    const ratesPromise = Promise.all(
+        Array.from(currencies.values())
+            .map(currency => {
+                return getRate(config.transferwise_token, currency, config.budget_currency)
+                    .then(rate => [currency, rate] as [string, number])
+            })
+        ).then(entries => new Map(entries));
+
+    Promise.all([balancesPromise, ratesPromise, budgetPromise, accountsPromise])
+        .then(([balances, rates, budget, accounts]) => {
             balances.forEach((milliunits, accountName) => {
                 const account = findByName(accounts, accountName);
                 const currency = config.foreign_currency_accounts[accountName];
 
-                Promise.all([
-                        ynabAPI.transactions.getTransactionsByAccount(budget.id, account.id)
-                            .then(resp => resp.data.transactions),
-                        getRate(config.transferwise_token, currency, config.budget_currency)
-                    ])
-                    .then(([transactions, rate]) => {
+                ynabAPI.transactions.getTransactionsByAccount(budget.id, account.id)
+                    .then(resp => resp.data.transactions)
+                    .then(transactions => {
+                        const rate = rates.get(currency)!;
                         return updateCurrencyFluctuation(
                             ynabAPI,
                             budget,
