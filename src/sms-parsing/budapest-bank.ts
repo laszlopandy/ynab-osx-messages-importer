@@ -25,7 +25,7 @@ function fixHungarian(str: string): string {
 
 const SMS_REGEX: Array<SmsParser> = [
     [
-        /^Visa Prémium POS tranzakciò ([0-9 ]+)Ft Idöpont: ([0-9\.]+) ([0-9:]+) E: ([0-9 ]+)Ft Hely: (.+)$/,
+        /^Visa Prémium(?: Kàrtya)? POS tranzakciò ([0-9 ]+)Ft Idöpont: ([0-9\.]+) ([0-9:]+) E: ([0-9 ]+)Ft Hely: (.+)$/,
         (parts: Array<string>) => ({
             type: 'pos',
             value: -1 * parseNumber(parts[1]),
