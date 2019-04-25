@@ -4,6 +4,7 @@ import * as lodash from 'lodash';
 import { isCleared } from './ynab';
 import { getRate } from './transferwise';
 
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function sumCurrencies(tranferwiseToken: string, targetCurrency: string, balances: Map<string, number>): Promise<number> {
     return Promise.all(
@@ -35,8 +36,8 @@ export function updateCurrencyFluctuation(
         transactions.filter(isCleared).filter(isCurrencyFluctuation),
         tr => tr.date);
 
-    const dateAndMonth = ynab.utils.getCurrentDateInISOFormat().substr(0, 7);
-    if (currencyTr != null && currencyTr.date.substr(0, 7) === dateAndMonth) {
+    const today = ynab.utils.getCurrentDateInISOFormat();
+    if (currencyTr != null && isoDateDiff(today, currencyTr.date) < SEVEN_DAYS_MS) {
         const transaction = {
             ...currencyTr,
             amount: currencyTr.amount + diff,
@@ -70,4 +71,8 @@ export function updateCurrencyFluctuation(
                 return tr;
             })
     }
+}
+
+function isoDateDiff(a: string, b: string) {
+    return Math.abs(Date.parse(a) - Date.parse(b));
 }

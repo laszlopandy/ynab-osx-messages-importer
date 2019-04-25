@@ -79,6 +79,7 @@ function main() {
                     .then(resp => resp.data.transactions)
                     .then(transactions => {
                         const rate = rates.get(currency)!;
+                        console.log(`Rate for ${currency}-${config.budget_currency}: ${rate}`);
                         return updateCurrencyFluctuation(
                             ynabAPI,
                             budget,
