@@ -36,8 +36,7 @@ export function updateCurrencyFluctuation(
         transactions.filter(isCleared).filter(isCurrencyFluctuation),
         tr => tr.date);
 
-    const today = ynab.utils.getCurrentDateInISOFormat();
-    if (currencyTr != null && isoDateDiff(today, currencyTr.date) < SEVEN_DAYS_MS) {
+    if (currencyTr != null && shouldUpdateTransaction(currencyTr)) {
         const transaction = {
             ...currencyTr,
             amount: currencyTr.amount + diff,
@@ -73,6 +72,23 @@ export function updateCurrencyFluctuation(
     }
 }
 
-function isoDateDiff(a: string, b: string) {
+function shouldUpdateTransaction(tr: ynab.TransactionDetail): boolean {
+    /* If the user updates the currency fluctuations every day
+     * we don't want to pollute their YNAB with too many transactions.
+     * So we only create a new transaction if:
+     *  - it's been more than 7 days since the previous one
+     *  - we are in a new calendar month
+     * Otherwise we update the amount on the old transaction.
+     */
+    const today = ynab.utils.getCurrentDateInISOFormat();
+    return isoDateDiff(today, tr.date) < SEVEN_DAYS_MS
+        && isoDateHasNameMonth(today, tr.date);
+}
+
+function isoDateDiff(a: string, b: string): number {
     return Math.abs(Date.parse(a) - Date.parse(b));
+}
+
+function isoDateHasNameMonth(a: string, b: string): boolean {
+    return a.substr(0, 7) === b.substr(0, 7);
 }
