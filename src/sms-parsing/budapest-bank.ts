@@ -49,6 +49,18 @@ const SMS_REGEX: Array<SmsParser> = [
         })
     ],
     [
+        /^Visa Prémium Kàrtya utòlagos jòvàiràs ([0-9 ]+)Ft Idöpont: ([0-9\.]+) ([0-9:]+) Hely: (.+) E: ([0-9 ]+)Ft$/,
+        (parts: Array<string>) => ({
+            type: 'incoming-pos',
+            value: parseNumber(parts[1]),
+            date: convertDate(parts[2]),
+            balance: parseNumber(parts[5]),
+            partner: fixHungarian(parts[4]),
+            time: parts[3],
+            memo: "",
+        })
+    ],
+    [
         /^HUF fizetési szàmla \([0-9]+\) utalàs érkezett ([0-9 ]+)Ft ([0-9\.]+) E: ([0-9 ]+)Ft Küldö: (.*) Közl: (.*)$/,
         (parts: Array<string>) => ({
             type: 'incoming-transfer',
@@ -93,7 +105,7 @@ const SMS_REGEX: Array<SmsParser> = [
         })
     ],
     [
-        /^Sikertelen Visa Prémium POS/,
+        /^Sikertelen Visa Prémium (Kàrtya )?POS/,
         () => null,
     ],
 ];
