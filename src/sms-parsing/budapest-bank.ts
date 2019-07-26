@@ -37,6 +37,18 @@ const SMS_REGEX: Array<SmsParser> = [
         })
     ],
     [
+        /^Törölt Visa Prémium(?: Kàrtya)? POS tranzakciò ([0-9 ]+)Ft Idöpont: ([0-9\.]+) ([0-9:]+) E: ([0-9 ]+)Ft Hely: (.+)$/,
+        (parts: Array<string>) => ({
+            type: 'pos',
+            value: parseNumber(parts[1]),
+            date: convertDate(parts[2]),
+            balance: parseNumber(parts[4]),
+            partner: fixHungarian(parts[5]),
+            time: parts[3],
+            memo: "",
+        })
+    ],
+    [
         /^Visa Prémium(?: Kàrtya)? ATM tranzakciò ([0-9 ]+)Ft Idöpont: ([0-9\.]+) ([0-9:]+) E: ([0-9 ]+)Ft Hely: (.+)$/,
         (parts: Array<string>) => ({
             type: 'atm',
