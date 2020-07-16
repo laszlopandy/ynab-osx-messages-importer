@@ -16,7 +16,7 @@
     "@types/lodash": "4.14.119",
     "@types/node": "6.0.118",
     "@types/node-fetch": "2.1.4",
-    "lodash": "4.17.11",
+    "lodash": "4.17.19",
     "node-fetch": "2.3.0",
     "sqlite": "3.0.0",
     "ynab": "1.9.0"
